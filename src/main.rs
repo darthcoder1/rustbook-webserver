@@ -103,18 +103,19 @@ fn handle_connection(mut stream: TcpStream) {
     let mut buffer = [0; 1024];
 
     if let Ok(read_bytes) = stream.read(&mut buffer) {
-        println!(
-            "Request({} bytes):\n{}",
-            read_bytes,
-            String::from_utf8_lossy(&buffer[..])
-        );
         if let Some(header) = HttpHeader::parse(&mut String::from_utf8_lossy(&buffer[..]).lines()) {
-            println!("Request: {:?}", header);
+            println!(">> HttpMessage ({} bytes)\n{:?}", read_bytes, header);
+
+            match header.request_type {
+                RequestType::Get => {
+                    let site_contents = fs::read_to_string("index.html").unwrap();
+                    let response = create_response(&site_contents);
+                    stream.write(response.as_bytes()).unwrap();
+                }
+                _ => (),
+            }
         }
     };
 
-    let site_contents = fs::read_to_string("index.html").unwrap();
-    let response = create_response(&site_contents);
-    stream.write(response.as_bytes()).unwrap();
     stream.flush().unwrap();
 }
