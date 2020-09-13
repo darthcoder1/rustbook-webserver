@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::fs;
 use std::net::{TcpListener, TcpStream};
+use std::str::Lines;
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
@@ -21,6 +23,82 @@ fn create_response(content: &str) -> String {
     )
 }
 
+#[derive(Debug, PartialEq)]
+enum RequestType {
+    Get,
+    Put,
+    Post,
+}
+
+#[derive(Debug)]
+struct HttpHeader {
+    request_type: RequestType,
+    uri: String,
+    version: String,
+    headers: HashMap<String, String>,
+    content: Option<String>,
+}
+
+impl HttpHeader {
+    fn parse(lines: &mut Lines) -> Option<HttpHeader> {
+        if let Some(start_line) = lines.next() {
+            let tokens: Vec<&str> = start_line.split(' ').collect();
+
+            if tokens.len() != 3 {
+                println!("Unable to parse message header");
+                return None;
+            }
+
+            let req_type = match tokens[0] {
+                "GET" => RequestType::Get,
+                "PUT" => RequestType::Put,
+                "POST" => RequestType::Post,
+                _ => {
+                    println!("Unable to parse message type: {}", tokens[0]);
+                    return None;
+                }
+            };
+
+            let uri = String::from(tokens[1]);
+            let version = String::from(tokens[2]);
+
+            let mut headers = HashMap::new();
+            while let Some(line) = lines.next() {
+                if line == "" {
+                    break;
+                }
+
+                let tokens: Vec<&str> = line.split(":").collect();
+                headers.insert(
+                    String::from(tokens[0].trim()),
+                    String::from(tokens[1].trim()),
+                );
+            }
+
+            let mut content = String::new();
+
+            if req_type != RequestType::Get {
+                while let Some(line) = lines.next() {
+                    content.push_str(line);
+                    content.push_str("\r\n");
+                }
+            }
+            return Some(HttpHeader {
+                request_type: req_type,
+                uri,
+                version,
+                headers,
+                content: if content.len() > 0 {
+                    Some(content)
+                } else {
+                    None
+                },
+            });
+        }
+        None
+    }
+}
+
 fn handle_connection(mut stream: TcpStream) {
     let mut buffer = [0; 1024];
 
@@ -30,6 +108,9 @@ fn handle_connection(mut stream: TcpStream) {
             read_bytes,
             String::from_utf8_lossy(&buffer[..])
         );
+        if let Some(header) = HttpHeader::parse(&mut String::from_utf8_lossy(&buffer[..]).lines()) {
+            println!("Request: {:?}", header);
+        }
     };
 
     let site_contents = fs::read_to_string("index.html").unwrap();
