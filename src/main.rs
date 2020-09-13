@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::net::{TcpListener, TcpStream};
+use std::path::Path;
 use std::str::Lines;
 
 fn main() {
@@ -99,6 +100,16 @@ impl HttpHeader {
     }
 }
 
+fn respond_error_404(stream: &mut TcpStream) {
+    let status_line = "HTTP/1.1 404 NOT FOUND\r\n\r\n";
+    let contents = fs::read_to_string("404.html").unwrap();
+
+    let response = format!("{}{}", status_line, contents);
+
+    stream.write(response.as_bytes()).unwrap();
+    stream.flush().unwrap();
+}
+
 fn handle_connection(mut stream: TcpStream) {
     let mut buffer = [0; 1024];
 
@@ -108,11 +119,15 @@ fn handle_connection(mut stream: TcpStream) {
 
             match header.request_type {
                 RequestType::Get => {
-                    let site_contents = fs::read_to_string("index.html").unwrap();
-                    let response = create_response(&site_contents);
-                    stream.write(response.as_bytes()).unwrap();
+                    let uri_path = &header.uri[1..];
+                    if let Ok(content) = fs::read_to_string(uri_path) {
+                        let response = create_response(&content);
+                        stream.write(response.as_bytes()).unwrap();
+                    } else {
+                        respond_error_404(&mut stream);
+                    }
                 }
-                _ => (),
+                _ => respond_error_404(&mut stream),
             }
         }
     };
