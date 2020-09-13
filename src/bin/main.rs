@@ -118,8 +118,6 @@ fn handle_connection(mut stream: TcpStream) {
 
     if let Ok(read_bytes) = stream.read(&mut buffer) {
         if let Some(header) = HttpHeader::parse(&mut String::from_utf8_lossy(&buffer[..]).lines()) {
-            println!(">> HttpMessage ({} bytes)\n{:?}", read_bytes, header);
-
             match header.request_type {
                 RequestType::Get => {
                     let uri_path = &header.uri[1..];

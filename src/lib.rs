@@ -1,5 +1,6 @@
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
@@ -64,8 +65,18 @@ impl Worker {
         let thread = thread::spawn(move || loop {
             if let Ok(msg) = rx.lock().unwrap().recv() {
                 match msg {
-                    Message::NewJob(job) => job(),
-                    Message::Terminate => break,
+                    Message::NewJob(job) => {
+                        println!("Worker {} got a job", id);
+                        let st = SystemTime::now();
+                        job();
+                        let et = SystemTime::now();
+                        let dur = et.duration_since(st).unwrap();
+                        println!("Executed job in {} ms", dur.as_millis());
+                    }
+                    Message::Terminate => {
+                        println!("Terminating worker {}", id);
+                        break;
+                    }
                     _ => println!("Msg unhandled"),
                 }
             }
